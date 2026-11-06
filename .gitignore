@@ -20,6 +20,7 @@ android/local.properties
 # IDE files
 .idea/
 .vscode/
+*.iml
 *.swp
 *.lock
 
