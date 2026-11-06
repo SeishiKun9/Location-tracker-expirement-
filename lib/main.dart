@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -16,14 +15,14 @@ class FriendTrackerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Friend Tracker - Prototype',
+      title: 'Friend Tracker',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
+        scaffoldBackgroundColor: const Color(0xFF090D16),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF38BDF8),
-          surface: Color(0xFF1E293B),
+          surface: Color(0xFF131D31),
         ),
         useMaterial3: true,
       ),
@@ -55,29 +54,32 @@ class MapTrackerScreen extends StatefulWidget {
 
 class _MapTrackerScreenState extends State<MapTrackerScreen> {
   final MapController _mapController = MapController();
-  LatLng _myLocation = const LatLng(37.7749, -122.4194); // Default: SF until GPS resolves
+  bool _isMapReady = false;
+
+  // Default initial coordinates before GPS fix
+  LatLng _myLocation = const LatLng(37.7749, -122.4194);
   bool _hasGpsFix = false;
   bool _isTracking = true;
   String _statusMessage = 'Connecting to GPS...';
 
-  // Demo friends with initial offsets
+  // Connected demo friends in room
   final List<FriendPin> _friends = [
     FriendPin(
       id: 'f1',
       name: 'Alex',
-      position: const LatLng(37.7760, -122.4180),
+      position: const LatLng(37.7765, -122.4182),
       color: const Color(0xFF10B981),
     ),
     FriendPin(
       id: 'f2',
       name: 'Sarah',
-      position: const LatLng(37.7735, -122.4210),
+      position: const LatLng(37.7731, -122.4208),
       color: const Color(0xFFEC4899),
     ),
     FriendPin(
       id: 'f3',
       name: 'Dave',
-      position: const LatLng(37.7755, -122.4230),
+      position: const LatLng(37.7758, -122.4235),
       color: const Color(0xFFF59E0B),
     ),
   ];
@@ -97,57 +99,85 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
   }
 
   Future<void> _startGpsStream() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      setState(() => _statusMessage = 'GPS is disabled on device');
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        setState(() => _statusMessage = 'Location permission denied');
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        setState(() => _statusMessage = 'Location services disabled');
         return;
       }
-    }
 
-    if (permission == LocationPermission.deniedForever) {
-      setState(() => _statusMessage = 'Permission permanently denied');
-      return;
-    }
-
-    setState(() => _statusMessage = 'Acquiring satellites...');
-
-    // Live continuous GPS updates
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 1, // update every 1 meter
-      ),
-    ).listen((Position pos) {
-      final newLatLng = LatLng(pos.latitude, pos.longitude);
-
-      setState(() {
-        _myLocation = newLatLng;
-        _hasGpsFix = true;
-        _statusMessage = 'Live • ${(pos.speed * 3.6).toStringAsFixed(1)} km/h';
-
-        // Anchor mock friends around user's real location once GPS connects
-        _friends[0].position = LatLng(pos.latitude + 0.0015, pos.longitude + 0.0012);
-        _friends[1].position = LatLng(pos.latitude - 0.0018, pos.longitude - 0.0014);
-        _friends[2].position = LatLng(pos.latitude + 0.0020, pos.longitude - 0.0016);
-      });
-
-      if (_isTracking) {
-        _mapController.move(newLatLng, _mapController.camera.zoom);
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (!mounted) return;
+          setState(() => _statusMessage = 'Location permission denied');
+          return;
+        }
       }
-    });
+
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() => _statusMessage = 'Location permission permanently denied');
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() => _statusMessage = 'Acquiring GPS fix...');
+
+      // Continuous live location listening
+      const LocationSettings locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 1, // trigger on 1 meter movement
+      );
+
+      _positionStream = Geolocator.getPositionStream(
+        locationSettings: locationSettings,
+      ).listen(
+        (Position pos) {
+          if (!mounted) return;
+
+          final newLatLng = LatLng(pos.latitude, pos.longitude);
+
+          setState(() {
+            _myLocation = newLatLng;
+            _hasGpsFix = true;
+            final speedKmH = (pos.speed * 3.6).clamp(0, 999);
+            _statusMessage = 'Live • ${speedKmH.toStringAsFixed(1)} km/h';
+
+            // Anchor mock friends around user's real location once GPS connects
+            _friends[0].position = LatLng(pos.latitude + 0.0015, pos.longitude + 0.0012);
+            _friends[1].position = LatLng(pos.latitude - 0.0018, pos.longitude - 0.0014);
+            _friends[2].position = LatLng(pos.latitude + 0.0020, pos.longitude - 0.0016);
+          });
+
+          // Safe camera update only when map is ready and tracking is on
+          if (_isTracking && _isMapReady) {
+            try {
+              _mapController.move(newLatLng, 16.0);
+            } catch (_) {}
+          }
+        },
+        onError: (error) {
+          if (!mounted) return;
+          setState(() => _statusMessage = 'GPS Error: $error');
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _statusMessage = 'Error: $e');
+    }
   }
 
+  // Safe distance calculation using Geolocator
   double _getDistanceInMeters(LatLng p1, LatLng p2) {
-    const Distance distance = Distance();
-    return distance.as(LengthUnit.Meter, p1, p2);
+    return Geolocator.distanceBetween(
+      p1.latitude,
+      p1.longitude,
+      p2.latitude,
+      p2.longitude,
+    );
   }
 
   String _formatDistance(double meters) {
@@ -157,12 +187,20 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
     return '${(meters / 1000).toStringAsFixed(1)} km';
   }
 
+  void _safeMoveCamera(LatLng target, double zoom) {
+    if (_isMapReady) {
+      try {
+        _mapController.move(target, zoom);
+      } catch (_) {}
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // OpenStreetMap View
+          // Single reliable Map API (OpenStreetMap)
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -170,6 +208,9 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
               initialZoom: 15.0,
               minZoom: 3.0,
               maxZoom: 18.0,
+              onMapReady: () {
+                setState(() => _isMapReady = true);
+              },
             ),
             children: [
               TileLayer(
@@ -180,12 +221,13 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
               // Markers Layer
               MarkerLayer(
                 markers: [
-                  // My Location Pin
+                  // My Location Marker
                   Marker(
                     point: _myLocation,
                     width: 60,
                     height: 60,
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -195,7 +237,11 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                           ),
                           child: const Text(
                             'YOU',
-                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                         const Icon(
@@ -207,14 +253,15 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                     ),
                   ),
 
-                  // Friends Pins
+                  // Friends Markers
                   ..._friends.map((friend) {
                     final dist = _getDistanceInMeters(_myLocation, friend.position);
                     return Marker(
                       point: friend.position,
-                      width: 70,
+                      width: 80,
                       height: 65,
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -254,10 +301,10 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A).withOpacity(0.92),
+                  color: const Color(0xEB0F172A),
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 10),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x66000000), blurRadius: 10),
                   ],
                   border: Border.all(color: const Color(0xFF334155)),
                 ),
@@ -278,8 +325,12 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const Text(
-                            'Friend Tracker (Map Prototype)',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                            'Friend Tracker',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Colors.white,
+                            ),
                           ),
                           Text(
                             _statusMessage,
@@ -296,7 +347,7 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                       onPressed: () {
                         setState(() => _isTracking = !_isTracking);
                         if (_isTracking) {
-                          _mapController.move(_myLocation, 16.0);
+                          _safeMoveCamera(_myLocation, 16.0);
                         }
                       },
                     ),
@@ -306,7 +357,7 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
             ),
           ),
 
-          // Bottom Quick Friend List
+          // Bottom Connected Friends Tray
           Positioned(
             bottom: 24,
             left: 12,
@@ -314,7 +365,7 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A).withOpacity(0.92),
+                color: const Color(0xEB0F172A),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: const Color(0xFF334155)),
               ),
@@ -327,11 +378,19 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                     children: [
                       const Text(
                         'Friends on Map',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1)),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFCBD5E1),
+                        ),
                       ),
                       Text(
                         '${_friends.length} active',
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF38BDF8), fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF38BDF8),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -342,7 +401,7 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                       return Expanded(
                         child: GestureDetector(
                           onTap: () {
-                            _mapController.move(f.position, 16.5);
+                            _safeMoveCamera(f.position, 16.5);
                           },
                           child: Container(
                             margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -350,7 +409,7 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFF1E293B),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: f.color.withOpacity(0.4)),
+                              border: Border.all(color: f.color.withAlpha(100)),
                             ),
                             child: Column(
                               children: [
@@ -359,13 +418,21 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                                   backgroundColor: f.color,
                                   child: Text(
                                     f.name[0],
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   f.name,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
                                 ),
                                 Text(
                                   _formatDistance(dist),
