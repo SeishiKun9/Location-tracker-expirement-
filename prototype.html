@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>📍 Friend Tracker - Live Map Prototype</title>
+  
+  <!-- Leaflet CSS (Free OpenStreetMap API) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    body, html {
+      height: 100%;
+      width: 100%;
+      background-color: #0b0f19;
+      color: #fff;
+      overflow: hidden;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+      z-index: 1;
+    }
+
+    /* Floating UI Controls */
+    .top-bar {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(8px);
+      padding: 12px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .title-group h1 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #eab308;
+    }
+    .dot.live {
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+    }
+
+    .btn-recenter {
+      background: #0284c7;
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+    .btn-recenter:hover {
+      background: #0369a1;
+    }
+
+    /* Bottom Friends Drawer */
+    .bottom-bar {
+      position: absolute;
+      bottom: 20px;
+      left: 16px;
+      right: 16px;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(8px);
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    .friends-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .friends-list {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .friend-card {
+      background: #1e293b;
+      padding: 10px 14px;
+      border-radius: 10px;
+      min-width: 130px;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: transform 0.15s, background 0.15s;
+    }
+    .friend-card:hover {
+      background: #334155;
+      transform: translateY(-2px);
+    }
+    .friend-name {
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .friend-dist {
+      font-size: 11px;
+      color: #38bdf8;
+      margin-top: 4px;
+    }
+
+    /* Custom Leaflet Marker Badges */
+    .user-marker {
+      background: #0284c7;
+      color: white;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 12px;
+      box-shadow: 0 0 12px rgba(2, 132, 199, 0.8);
+      animation: pulse 2s infinite;
+    }
+    .friend-marker {
+      color: white;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.7); }
+      70% { box-shadow: 0 0 0 15px rgba(2, 132, 199, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(2, 132, 199, 0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Map Container -->
+  <div id="map"></div>
+
+  <!-- Top Floating Status Bar -->
+  <div class="top-bar">
+    <div class="title-group">
+      <h1>📍 Friend Tracker Prototype</h1>
+      <div class="status-badge">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">Acquiring GPS...</span>
+      </div>
+    </div>
+    <button class="btn-recenter" onclick="recenterOnMe()">🎯 Recenter</button>
+  </div>
+
+  <!-- Bottom Active Friends Panel -->
+  <div class="bottom-bar">
+    <div class="friends-header">
+      <span>Friends in Room (3)</span>
+      <span style="color: #38bdf8;">Free Map API</span>
+    </div>
+    <div class="friends-list" id="friends-list">
+      <!-- Dynamically generated friend cards -->
+    </div>
+  </div>
+
+  <!-- Leaflet JS (OpenStreetMap API) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // 1. Initialize Map with OpenStreetMap CartoDB Dark Tiles
+    const map = L.map('map', { zoomControl: false }).setView([37.7749, -122.4194], 14);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // 2. Haversine Distance Calculator
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Earth radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const d = R * c;
+      return d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(2)} km`;
+    }
+
+    let myPos = { lat: 37.7749, lng: -122.4194 };
+    let myMarker = null;
+    let lines = [];
+
+    // Mock Friends data
+    const friends = [
+      { id: 'f1', name: 'Alex', color: '#10b981', latOffset: 0.0016, lngOffset: 0.0012, marker: null },
+      { id: 'f2', name: 'Sarah', color: '#ec4899', latOffset: -0.0018, lngOffset: -0.0015, marker: null },
+      { id: 'f3', name: 'Dave', color: '#f59e0b', latOffset: 0.0022, lngOffset: -0.0018, marker: null }
+    ];
+
+    function createMarkerHtml(letter, bgClass, color) {
+      const style = color ? `background: ${color};` : '';
+      return `<div class="${bgClass}" style="${style}">${letter}</div>`;
+    }
+
+    function renderFriends() {
+      const listEl = document.getElementById('friends-list');
+      listEl.innerHTML = '';
+
+      // Clear previous distance connection lines
+      lines.forEach(l => map.removeLayer(l));
+      lines = [];
+
+      friends.forEach(f => {
+        const friendLat = myPos.lat + f.latOffset;
+        const friendLng = myPos.lng + f.lngOffset;
+        const dist = calculateDistance(myPos.lat, myPos.lng, friendLat, friendLng);
+
+        // Marker
+        if (!f.marker) {
+          const icon = L.divIcon({
+            html: createMarkerHtml(f.name[0], 'friend-marker', f.color),
+            className: ''
+          });
+          f.marker = L.marker([friendLat, friendLng], { icon }).addTo(map)
+            .bindPopup(`<b>${f.name}</b><br>${dist} away`);
+        } else {
+          f.marker.setLatLng([friendLat, friendLng]);
+        }
+
+        // Draw dotted proximity line to friend
+        const line = L.polyline([[myPos.lat, myPos.lng], [friendLat, friendLng]], {
+          color: f.color,
+          weight: 2,
+          opacity: 0.6,
+          dashArray: '6, 8'
+        }).addTo(map);
+        lines.push(line);
+
+        // Card in UI
+        const card = document.createElement('div');
+        card.className = 'friend-card';
+        card.innerHTML = `
+          <div class="friend-name">
+            <span style="color: ${f.color}">●</span> ${f.name}
+          </div>
+          <div class="friend-dist">${dist} away</div>
+        `;
+        card.onclick = () => {
+          map.flyTo([friendLat, friendLng], 16);
+          f.marker.openPopup();
+        };
+        listEl.appendChild(card);
+      });
+    }
+
+    // 3. Live Browser GPS Watcher
+    if (navigator.geolocation) {
+      navigator.geolocation.watchPosition(
+        (pos) => {
+          myPos.lat = pos.coords.latitude;
+          myPos.lng = pos.coords.longitude;
+
+          document.getElementById('status-dot').classList.add('live');
+          document.getElementById('status-text').innerText = `Live GPS Fix (${myPos.lat.toFixed(4)}, ${myPos.lng.toFixed(4)})`;
+
+          if (!myMarker) {
+            const userIcon = L.divIcon({
+              html: createMarkerHtml('ME', 'user-marker'),
+              className: ''
+            });
+            myMarker = L.marker([myPos.lat, myPos.lng], { icon: userIcon }).addTo(map)
+              .bindPopup('<b>You are here</b>');
+            map.setView([myPos.lat, myPos.lng], 15);
+          } else {
+            myMarker.setLatLng([myPos.lat, myPos.lng]);
+          }
+
+          renderFriends();
+        },
+        (err) => {
+          console.warn('GPS Error/Denied, using default location:', err.message);
+          document.getElementById('status-text').innerText = 'Using Demo Coordinates (GPS Denied)';
+          if (!myMarker) {
+            const userIcon = L.divIcon({
+              html: createMarkerHtml('ME', 'user-marker'),
+              className: ''
+            });
+            myMarker = L.marker([myPos.lat, myPos.lng], { icon: userIcon }).addTo(map);
+          }
+          renderFriends();
+        },
+        { enableHighAccuracy: true, maximumAge: 1000 }
+      );
+    }
+
+    function recenterOnMe() {
+      if (myMarker) {
+        map.flyTo([myPos.lat, myPos.lng], 16);
+      }
+    }
+  </script>
+</body>
+</html>
