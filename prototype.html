@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>📍 Friend Tracker - Live Map Prototype</title>
+  <title>📍 Friend Tracker - Map API Demo</title>
   
-  <!-- Leaflet CSS (Free OpenStreetMap API) -->
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <style>
@@ -35,18 +35,20 @@
       left: 16px;
       right: 16px;
       z-index: 1000;
-      background: rgba(15, 23, 42, 0.92);
+      background: rgba(15, 23, 42, 0.94);
       backdrop-filter: blur(8px);
       padding: 12px 18px;
       border-radius: 14px;
       border: 1px solid rgba(255, 255, 255, 0.1);
       display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
       justify-content: space-between;
       align-items: center;
       box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     }
     .title-group h1 {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
       color: #f8fafc;
     }
@@ -69,22 +71,61 @@
       box-shadow: 0 0 8px #22c55e;
     }
 
-    .btn-recenter {
+    .controls-right {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .style-select {
+      background: #1e293b;
+      color: #f8fafc;
+      border: 1px solid #334155;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+    }
+    .btn-action {
       background: #0284c7;
       color: #fff;
       border: none;
-      padding: 8px 14px;
+      padding: 7px 12px;
       border-radius: 8px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
       transition: background 0.2s;
     }
-    .btn-recenter:hover {
+    .btn-action:hover {
       background: #0369a1;
+    }
+
+    /* API Key Banner */
+    .key-bar {
+      position: absolute;
+      top: 80px;
+      left: 16px;
+      right: 16px;
+      z-index: 1000;
+      background: rgba(30, 41, 59, 0.95);
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .key-input {
+      flex: 1;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #38bdf8;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 11px;
     }
 
     /* Bottom Friends Drawer */
@@ -94,7 +135,7 @@
       left: 16px;
       right: 16px;
       z-index: 1000;
-      background: rgba(15, 23, 42, 0.92);
+      background: rgba(15, 23, 42, 0.94);
       backdrop-filter: blur(8px);
       padding: 14px 16px;
       border-radius: 16px;
@@ -106,7 +147,7 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 10px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       color: #94a3b8;
       text-transform: uppercase;
@@ -120,20 +161,15 @@
     }
     .friend-card {
       background: #1e293b;
-      padding: 10px 14px;
+      padding: 8px 12px;
       border-radius: 10px;
-      min-width: 130px;
+      min-width: 125px;
       cursor: pointer;
       border: 1px solid rgba(255,255,255,0.06);
-      transition: transform 0.15s, background 0.15s;
-    }
-    .friend-card:hover {
-      background: #334155;
-      transform: translateY(-2px);
     }
     .friend-name {
       font-weight: 700;
-      font-size: 13px;
+      font-size: 12px;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -141,10 +177,10 @@
     .friend-dist {
       font-size: 11px;
       color: #38bdf8;
-      margin-top: 4px;
+      margin-top: 2px;
     }
 
-    /* Custom Leaflet Marker Badges */
+    /* Markers */
     .user-marker {
       background: #0284c7;
       color: white;
@@ -156,7 +192,7 @@
       align-items: center;
       justify-content: center;
       font-weight: 800;
-      font-size: 12px;
+      font-size: 11px;
       box-shadow: 0 0 12px rgba(2, 132, 199, 0.8);
       animation: pulse 2s infinite;
     }
@@ -164,14 +200,13 @@
       color: white;
       border: 2px solid #fff;
       border-radius: 50%;
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 800;
-      font-size: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      font-size: 11px;
     }
 
     @keyframes pulse {
@@ -183,46 +218,92 @@
 </head>
 <body>
 
-  <!-- Map Container -->
+  <!-- Map Canvas -->
   <div id="map"></div>
 
-  <!-- Top Floating Status Bar -->
+  <!-- Top Status Bar -->
   <div class="top-bar">
     <div class="title-group">
-      <h1>📍 Friend Tracker Prototype</h1>
+      <h1>📍 Friend Tracker (Map API Demo)</h1>
       <div class="status-badge">
         <span class="dot" id="status-dot"></span>
         <span id="status-text">Acquiring GPS...</span>
       </div>
     </div>
-    <button class="btn-recenter" onclick="recenterOnMe()">🎯 Recenter</button>
+
+    <div class="controls-right">
+      <select class="style-select" id="style-select" onchange="changeMapStyle()">
+        <option value="maptiler-streets">MapTiler Streets (API Key)</option>
+        <option value="maptiler-satellite">MapTiler Satellite (API Key)</option>
+        <option value="carto-dark">Carto Dark Mode (Free)</option>
+        <option value="osm-standard">OpenStreetMap Standard (Free)</option>
+      </select>
+      <button class="btn-action" onclick="recenterOnMe()">🎯 Recenter</button>
+    </div>
+  </div>
+
+  <!-- API Key Bar -->
+  <div class="key-bar">
+    <span style="color: #38bdf8; font-weight: 600;">🔑 API Key (.env):</span>
+    <input type="text" id="api-key-input" class="key-input" value="get_your_own_OpIi9ZULNHzrESv6T2vL" placeholder="Paste MapTiler API Key" />
+    <button class="btn-action" style="padding: 4px 8px;" onclick="applyApiKey()">Apply</button>
   </div>
 
   <!-- Bottom Active Friends Panel -->
   <div class="bottom-bar">
     <div class="friends-header">
-      <span>Friends in Room (3)</span>
-      <span style="color: #38bdf8;">Free Map API</span>
+      <span>Connected Friends (3)</span>
+      <span style="color: #38bdf8;">Configured via .env</span>
     </div>
-    <div class="friends-list" id="friends-list">
-      <!-- Dynamically generated friend cards -->
-    </div>
+    <div class="friends-list" id="friends-list"></div>
   </div>
 
-  <!-- Leaflet JS (OpenStreetMap API) -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // 1. Initialize Map with OpenStreetMap CartoDB Dark Tiles
+    let currentTileLayer = null;
+    let apiKey = document.getElementById('api-key-input').value;
+
     const map = L.map('map', { zoomControl: false }).setView([37.7749, -122.4194], 14);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
+    // Map Tile Styles definition
+    function getTileUrl(style, key) {
+      switch(style) {
+        case 'maptiler-streets':
+          return `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${key}`;
+        case 'maptiler-satellite':
+          return `https://api.maptiler.com/maps/hybrid/{z}/{x}/{y}.jpg?key=${key}`;
+        case 'carto-dark':
+          return 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+        case 'osm-standard':
+        default:
+          return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+      }
+    }
 
-    // 2. Haversine Distance Calculator
+    function setLayer(style) {
+      if (currentTileLayer) map.removeLayer(currentTileLayer);
+      const url = getTileUrl(style, apiKey);
+      currentTileLayer = L.tileLayer(url, {
+        maxZoom: 19,
+        attribution: '© MapTiler / OpenStreetMap contributors'
+      }).addTo(map);
+    }
+
+    setLayer('maptiler-streets');
+
+    function changeMapStyle() {
+      const selected = document.getElementById('style-select').value;
+      setLayer(selected);
+    }
+
+    function applyApiKey() {
+      apiKey = document.getElementById('api-key-input').value.trim();
+      changeMapStyle();
+    }
+
+    // Distance Calculation
     function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371; // Earth radius in km
+      const R = 6371;
       const dLat = (lat2 - lat1) * Math.PI / 180;
       const dLon = (lon2 - lon1) * Math.PI / 180;
       const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -237,23 +318,15 @@
     let myMarker = null;
     let lines = [];
 
-    // Mock Friends data
     const friends = [
       { id: 'f1', name: 'Alex', color: '#10b981', latOffset: 0.0016, lngOffset: 0.0012, marker: null },
       { id: 'f2', name: 'Sarah', color: '#ec4899', latOffset: -0.0018, lngOffset: -0.0015, marker: null },
       { id: 'f3', name: 'Dave', color: '#f59e0b', latOffset: 0.0022, lngOffset: -0.0018, marker: null }
     ];
 
-    function createMarkerHtml(letter, bgClass, color) {
-      const style = color ? `background: ${color};` : '';
-      return `<div class="${bgClass}" style="${style}">${letter}</div>`;
-    }
-
     function renderFriends() {
       const listEl = document.getElementById('friends-list');
       listEl.innerHTML = '';
-
-      // Clear previous distance connection lines
       lines.forEach(l => map.removeLayer(l));
       lines = [];
 
@@ -262,10 +335,9 @@
         const friendLng = myPos.lng + f.lngOffset;
         const dist = calculateDistance(myPos.lat, myPos.lng, friendLat, friendLng);
 
-        // Marker
         if (!f.marker) {
           const icon = L.divIcon({
-            html: createMarkerHtml(f.name[0], 'friend-marker', f.color),
+            html: `<div class="friend-marker" style="background:${f.color}">${f.name[0]}</div>`,
             className: ''
           });
           f.marker = L.marker([friendLat, friendLng], { icon }).addTo(map)
@@ -274,22 +346,18 @@
           f.marker.setLatLng([friendLat, friendLng]);
         }
 
-        // Draw dotted proximity line to friend
         const line = L.polyline([[myPos.lat, myPos.lng], [friendLat, friendLng]], {
           color: f.color,
           weight: 2,
-          opacity: 0.6,
-          dashArray: '6, 8'
+          opacity: 0.7,
+          dashArray: '5, 8'
         }).addTo(map);
         lines.push(line);
 
-        // Card in UI
         const card = document.createElement('div');
         card.className = 'friend-card';
         card.innerHTML = `
-          <div class="friend-name">
-            <span style="color: ${f.color}">●</span> ${f.name}
-          </div>
+          <div class="friend-name"><span style="color:${f.color}">●</span> ${f.name}</div>
           <div class="friend-dist">${dist} away</div>
         `;
         card.onclick = () => {
@@ -300,7 +368,6 @@
       });
     }
 
-    // 3. Live Browser GPS Watcher
     if (navigator.geolocation) {
       navigator.geolocation.watchPosition(
         (pos) => {
@@ -308,42 +375,34 @@
           myPos.lng = pos.coords.longitude;
 
           document.getElementById('status-dot').classList.add('live');
-          document.getElementById('status-text').innerText = `Live GPS Fix (${myPos.lat.toFixed(4)}, ${myPos.lng.toFixed(4)})`;
+          document.getElementById('status-text').innerText = `Live GPS (${myPos.lat.toFixed(4)}, ${myPos.lng.toFixed(4)})`;
 
           if (!myMarker) {
             const userIcon = L.divIcon({
-              html: createMarkerHtml('ME', 'user-marker'),
+              html: `<div class="user-marker">ME</div>`,
               className: ''
             });
-            myMarker = L.marker([myPos.lat, myPos.lng], { icon: userIcon }).addTo(map)
-              .bindPopup('<b>You are here</b>');
+            myMarker = L.marker([myPos.lat, myPos.lng], { icon: userIcon }).addTo(map);
             map.setView([myPos.lat, myPos.lng], 15);
           } else {
             myMarker.setLatLng([myPos.lat, myPos.lng]);
           }
-
           renderFriends();
         },
         (err) => {
-          console.warn('GPS Error/Denied, using default location:', err.message);
-          document.getElementById('status-text').innerText = 'Using Demo Coordinates (GPS Denied)';
+          document.getElementById('status-text').innerText = 'Demo GPS Mode';
           if (!myMarker) {
-            const userIcon = L.divIcon({
-              html: createMarkerHtml('ME', 'user-marker'),
-              className: ''
-            });
+            const userIcon = L.divIcon({ html: `<div class="user-marker">ME</div>`, className: '' });
             myMarker = L.marker([myPos.lat, myPos.lng], { icon: userIcon }).addTo(map);
           }
           renderFriends();
         },
-        { enableHighAccuracy: true, maximumAge: 1000 }
+        { enableHighAccuracy: true }
       );
     }
 
     function recenterOnMe() {
-      if (myMarker) {
-        map.flyTo([myPos.lat, myPos.lng], 16);
-      }
+      if (myMarker) map.flyTo([myPos.lat, myPos.lng], 16);
     }
   </script>
 </body>

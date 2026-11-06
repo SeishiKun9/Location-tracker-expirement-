@@ -1,0 +1,22 @@
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+
+# Flutter & Dart build outputs
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# Android build outputs
+android/app/build/
+android/.gradle/
+**/android/**/build/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.lock
