@@ -2,6 +2,11 @@
 .env
 .env.local
 .env.*.local
+backend/.env
+backend/.env.local
+
+# Node.js backend dependencies
+backend/node_modules/
 
 # Flutter & Dart build outputs
 .dart_tool/
