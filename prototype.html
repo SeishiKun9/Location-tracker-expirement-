@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>📍 Friend Tracker - Map API Demo</title>
+  <title>📍 Friend Tracker</title>
   
-  <!-- Leaflet CSS -->
+  <!-- Leaflet Map CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <style>
@@ -28,7 +28,7 @@
       z-index: 1;
     }
 
-    /* Floating UI Controls */
+    /* Top Floating Header */
     .top-bar {
       position: absolute;
       top: 16px;
@@ -36,19 +36,17 @@
       right: 16px;
       z-index: 1000;
       background: rgba(15, 23, 42, 0.94);
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
       padding: 12px 18px;
       border-radius: 14px;
       border: 1px solid rgba(255, 255, 255, 0.1);
       display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
       justify-content: space-between;
       align-items: center;
       box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     }
     .title-group h1 {
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 700;
       color: #f8fafc;
     }
@@ -71,61 +69,22 @@
       box-shadow: 0 0 8px #22c55e;
     }
 
-    .controls-right {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    .style-select {
-      background: #1e293b;
-      color: #f8fafc;
-      border: 1px solid #334155;
-      padding: 6px 10px;
-      border-radius: 8px;
-      font-size: 12px;
-      outline: none;
-      cursor: pointer;
-    }
-    .btn-action {
+    .btn-recenter {
       background: #0284c7;
       color: #fff;
       border: none;
-      padding: 7px 12px;
+      padding: 8px 16px;
       border-radius: 8px;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
-    }
-    .btn-action:hover {
-      background: #0369a1;
-    }
-
-    /* API Key Banner */
-    .key-bar {
-      position: absolute;
-      top: 80px;
-      left: 16px;
-      right: 16px;
-      z-index: 1000;
-      background: rgba(30, 41, 59, 0.95);
-      padding: 8px 14px;
-      border-radius: 10px;
-      border: 1px solid rgba(56, 189, 248, 0.3);
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 12px;
+      gap: 6px;
+      transition: background 0.2s;
     }
-    .key-input {
-      flex: 1;
-      background: #0f172a;
-      border: 1px solid #334155;
-      color: #38bdf8;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-family: monospace;
-      font-size: 11px;
+    .btn-recenter:hover {
+      background: #0369a1;
     }
 
     /* Bottom Friends Drawer */
@@ -136,7 +95,7 @@
       right: 16px;
       z-index: 1000;
       background: rgba(15, 23, 42, 0.94);
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
       padding: 14px 16px;
       border-radius: 16px;
       border: 1px solid rgba(255, 255, 255, 0.1);
@@ -147,7 +106,7 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 10px;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
       color: #94a3b8;
       text-transform: uppercase;
@@ -161,15 +120,20 @@
     }
     .friend-card {
       background: #1e293b;
-      padding: 8px 12px;
+      padding: 10px 14px;
       border-radius: 10px;
-      min-width: 125px;
+      min-width: 130px;
       cursor: pointer;
       border: 1px solid rgba(255,255,255,0.06);
+      transition: transform 0.15s, background 0.15s;
+    }
+    .friend-card:hover {
+      background: #334155;
+      transform: translateY(-2px);
     }
     .friend-name {
       font-weight: 700;
-      font-size: 12px;
+      font-size: 13px;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -177,10 +141,10 @@
     .friend-dist {
       font-size: 11px;
       color: #38bdf8;
-      margin-top: 2px;
+      margin-top: 4px;
     }
 
-    /* Markers */
+    /* Custom Badges for Map Pins */
     .user-marker {
       background: #0284c7;
       color: white;
@@ -207,6 +171,7 @@
       justify-content: center;
       font-weight: 800;
       font-size: 11px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
     }
 
     @keyframes pulse {
@@ -218,92 +183,45 @@
 </head>
 <body>
 
-  <!-- Map Canvas -->
+  <!-- Fullscreen Map Canvas -->
   <div id="map"></div>
 
-  <!-- Top Status Bar -->
+  <!-- Top Floating Header -->
   <div class="top-bar">
     <div class="title-group">
-      <h1>📍 Friend Tracker (Map API Demo)</h1>
+      <h1>📍 Friend Tracker</h1>
       <div class="status-badge">
         <span class="dot" id="status-dot"></span>
-        <span id="status-text">Acquiring GPS...</span>
+        <span id="status-text">Acquiring GPS location...</span>
       </div>
     </div>
-
-    <div class="controls-right">
-      <select class="style-select" id="style-select" onchange="changeMapStyle()">
-        <option value="maptiler-streets">MapTiler Streets (API Key)</option>
-        <option value="maptiler-satellite">MapTiler Satellite (API Key)</option>
-        <option value="carto-dark">Carto Dark Mode (Free)</option>
-        <option value="osm-standard">OpenStreetMap Standard (Free)</option>
-      </select>
-      <button class="btn-action" onclick="recenterOnMe()">🎯 Recenter</button>
-    </div>
-  </div>
-
-  <!-- API Key Bar -->
-  <div class="key-bar">
-    <span style="color: #38bdf8; font-weight: 600;">🔑 API Key (.env):</span>
-    <input type="text" id="api-key-input" class="key-input" value="get_your_own_OpIi9ZULNHzrESv6T2vL" placeholder="Paste MapTiler API Key" />
-    <button class="btn-action" style="padding: 4px 8px;" onclick="applyApiKey()">Apply</button>
+    <button class="btn-recenter" onclick="recenterOnMe()">🎯 Recenter</button>
   </div>
 
   <!-- Bottom Active Friends Panel -->
   <div class="bottom-bar">
     <div class="friends-header">
       <span>Connected Friends (3)</span>
-      <span style="color: #38bdf8;">Configured via .env</span>
+      <span style="color: #38bdf8;">Live Tracking</span>
     </div>
     <div class="friends-list" id="friends-list"></div>
   </div>
 
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    let currentTileLayer = null;
-    let apiKey = document.getElementById('api-key-input').value;
+    // Initialize Map with 1 single reliable Map API (CartoDB Voyager / OpenStreetMap)
+    const MAP_API_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+    const map = L.map('map', { zoomControl: false }).setView([37.7749, -122.4194], 15);
 
-    const map = L.map('map', { zoomControl: false }).setView([37.7749, -122.4194], 14);
+    L.tileLayer(MAP_API_URL, {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors, © CARTO'
+    }).addTo(map);
 
-    // Map Tile Styles definition
-    function getTileUrl(style, key) {
-      switch(style) {
-        case 'maptiler-streets':
-          return `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${key}`;
-        case 'maptiler-satellite':
-          return `https://api.maptiler.com/maps/hybrid/{z}/{x}/{y}.jpg?key=${key}`;
-        case 'carto-dark':
-          return 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-        case 'osm-standard':
-        default:
-          return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-      }
-    }
-
-    function setLayer(style) {
-      if (currentTileLayer) map.removeLayer(currentTileLayer);
-      const url = getTileUrl(style, apiKey);
-      currentTileLayer = L.tileLayer(url, {
-        maxZoom: 19,
-        attribution: '© MapTiler / OpenStreetMap contributors'
-      }).addTo(map);
-    }
-
-    setLayer('maptiler-streets');
-
-    function changeMapStyle() {
-      const selected = document.getElementById('style-select').value;
-      setLayer(selected);
-    }
-
-    function applyApiKey() {
-      apiKey = document.getElementById('api-key-input').value.trim();
-      changeMapStyle();
-    }
-
-    // Distance Calculation
+    // Distance Calculation (Haversine Formula)
     function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371;
+      const R = 6371; // Earth radius in km
       const dLat = (lat2 - lat1) * Math.PI / 180;
       const dLon = (lon2 - lon1) * Math.PI / 180;
       const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -318,6 +236,7 @@
     let myMarker = null;
     let lines = [];
 
+    // Mock Friends connected in this room
     const friends = [
       { id: 'f1', name: 'Alex', color: '#10b981', latOffset: 0.0016, lngOffset: 0.0012, marker: null },
       { id: 'f2', name: 'Sarah', color: '#ec4899', latOffset: -0.0018, lngOffset: -0.0015, marker: null },
@@ -335,6 +254,7 @@
         const friendLng = myPos.lng + f.lngOffset;
         const dist = calculateDistance(myPos.lat, myPos.lng, friendLat, friendLng);
 
+        // Marker Pin
         if (!f.marker) {
           const icon = L.divIcon({
             html: `<div class="friend-marker" style="background:${f.color}">${f.name[0]}</div>`,
@@ -346,6 +266,7 @@
           f.marker.setLatLng([friendLat, friendLng]);
         }
 
+        // Draw distance line connecting to friend
         const line = L.polyline([[myPos.lat, myPos.lng], [friendLat, friendLng]], {
           color: f.color,
           weight: 2,
@@ -354,6 +275,7 @@
         }).addTo(map);
         lines.push(line);
 
+        // Friend Card in bottom tray
         const card = document.createElement('div');
         card.className = 'friend-card';
         card.innerHTML = `
@@ -368,6 +290,7 @@
       });
     }
 
+    // Live Geolocation Watcher
     if (navigator.geolocation) {
       navigator.geolocation.watchPosition(
         (pos) => {
@@ -382,7 +305,8 @@
               html: `<div class="user-marker">ME</div>`,
               className: ''
             });
-            myMarker = L.marker([myPos.lat, myPos.lng], { icon: userIcon }).addTo(map);
+            myMarker = L.marker([myPos.lat, myPos.lng], { icon: userIcon }).addTo(map)
+              .bindPopup('<b>You are here</b>');
             map.setView([myPos.lat, myPos.lng], 15);
           } else {
             myMarker.setLatLng([myPos.lat, myPos.lng]);
@@ -390,14 +314,14 @@
           renderFriends();
         },
         (err) => {
-          document.getElementById('status-text').innerText = 'Demo GPS Mode';
+          document.getElementById('status-text').innerText = 'Demo GPS Mode (Location permission needed)';
           if (!myMarker) {
             const userIcon = L.divIcon({ html: `<div class="user-marker">ME</div>`, className: '' });
             myMarker = L.marker([myPos.lat, myPos.lng], { icon: userIcon }).addTo(map);
           }
           renderFriends();
         },
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true, maximumAge: 1000 }
       );
     }
 
