@@ -15,3 +15,4 @@ class FriendPin {
     required this.color,
   });
 }
+

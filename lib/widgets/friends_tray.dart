@@ -110,3 +110,4 @@ class FriendsTray extends StatelessWidget {
     );
   }
 }
+

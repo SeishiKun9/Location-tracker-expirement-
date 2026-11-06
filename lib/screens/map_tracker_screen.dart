@@ -237,3 +237,4 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
     );
   }
 }
+
