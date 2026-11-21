@@ -47,3 +47,4 @@ server.listen(PORT, async () => {
   console.log(`🚀 Friend Tracker Server running on port ${PORT}`);
   await initDatabase();
 });
+

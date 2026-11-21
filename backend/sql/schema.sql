@@ -42,3 +42,4 @@ CREATE TABLE IF NOT EXISTS location_history (
 -- 5. Indexes for fast geospatial lookup & real-time querying
 CREATE INDEX IF NOT EXISTS idx_live_locations_room ON live_locations(room_id);
 CREATE INDEX IF NOT EXISTS idx_location_history_user_room ON location_history(user_id, room_id, recorded_at DESC);
+

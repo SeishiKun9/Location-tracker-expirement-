@@ -36,3 +36,4 @@ PORT=3000
 npm start
 ```
 The server will automatically verify tables and start listening on `http://localhost:3000`.
+
