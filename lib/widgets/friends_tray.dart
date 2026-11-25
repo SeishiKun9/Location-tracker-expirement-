@@ -95,6 +95,8 @@ class FriendsTray extends StatelessWidget {
                           ),
                           Text(
                             DistanceUtils.formatDistance(dist),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
                           ),
                         ],

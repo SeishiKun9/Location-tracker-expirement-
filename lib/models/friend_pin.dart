@@ -8,7 +8,6 @@ class FriendPin {
   LatLng position;
   final Color color;
   double speed;
-  double heading;
   String status;
   final List<LatLng> trail;
 
@@ -18,7 +17,6 @@ class FriendPin {
     required this.position,
     required this.color,
     this.speed = 0.0,
-    this.heading = 0.0,
     this.status = 'Active',
     List<LatLng>? trail,
   }) : trail = trail ?? [];

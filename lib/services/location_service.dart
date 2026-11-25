@@ -4,23 +4,46 @@ import 'package:geolocator/geolocator.dart';
 /// Service responsible for managing device GPS permissions and location streams.
 class LocationService {
   /// Verifies location services and requests permission if needed.
-  /// Throws an exception with a descriptive error message if unavailable.
+  /// Throws an [Exception] with a descriptive message if unavailable.
   static Future<void> checkAndRequestPermission() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      throw 'Location services are disabled on this device.';
+      throw Exception('Location services are disabled on this device.');
     }
 
-    LocationPermission permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        throw 'Location permissions were denied.';
+        throw Exception('Location permissions were denied.');
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      throw 'Location permissions are permanently denied in device settings.';
+      throw Exception(
+        'Location permissions are permanently denied in device settings.',
+      );
+    }
+  }
+
+  /// Fetches an initial GPS fix quickly so stationary devices don't wait on movement.
+  static Future<Position?> getInitialPosition() async {
+    try {
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) return lastKnown;
+    } catch (_) {
+      // getLastKnownPosition is unsupported on some platforms (e.g. web).
+    }
+
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+    } catch (_) {
+      return null;
     }
   }
 
@@ -34,4 +57,3 @@ class LocationService {
     );
   }
 }
-

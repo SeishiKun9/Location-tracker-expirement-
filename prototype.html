@@ -73,23 +73,6 @@
       display: flex;
       gap: 8px;
     }
-    .btn-toggle {
-      background: #1e293b;
-      color: #38bdf8;
-      border: 1px solid #334155;
-      padding: 7px 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      transition: background 0.2s;
-    }
-    .btn-toggle:hover {
-      background: #334155;
-    }
     .btn-recenter {
       background: #0284c7;
       color: #fff;
@@ -223,7 +206,6 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="btn-toggle" onclick="toggleLayer()" id="layer-btn">🛰️ Satellite</button>
       <button class="btn-recenter" onclick="recenterOnMe()">🎯 Recenter</button>
     </div>
   </div>
@@ -240,30 +222,16 @@
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // Two high-performance, CORS-enabled Map APIs (CartoDB Voyager & Esri World Imagery)
+    // Single Map API (CartoDB Voyager - OpenStreetMap, no key required)
     const STREET_TILE = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-    const SATELLITE_TILE = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
-    let isSatellite = false;
     const map = L.map('map', { zoomControl: false }).setView([37.7749, -122.4194], 15);
 
-    let currentLayer = L.tileLayer(STREET_TILE, {
+    L.tileLayer(STREET_TILE, {
       maxZoom: 19,
       subdomains: ['a', 'b', 'c', 'd'],
       attribution: '© OpenStreetMap contributors, © CARTO'
     }).addTo(map);
-
-    function toggleLayer() {
-      map.removeLayer(currentLayer);
-      isSatellite = !isSatellite;
-      const url = isSatellite ? SATELLITE_TILE : STREET_TILE;
-      currentLayer = L.tileLayer(url, {
-        maxZoom: 19,
-        subdomains: isSatellite ? [] : ['a', 'b', 'c', 'd'],
-        attribution: isSatellite ? '© Esri, Maxar, Earthstar Geographics' : '© OpenStreetMap contributors, © CARTO'
-      }).addTo(map);
-      document.getElementById('layer-btn').innerText = isSatellite ? '🗺️ Streets' : '🛰️ Satellite';
-    }
 
     // Distance Calculation (Haversine Formula)
     function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -301,15 +269,17 @@
         const dist = calculateDistance(myPos.lat, myPos.lng, f.lat, f.lng);
 
         // Marker Pin
+        const popupHtml = `<b>${f.name}</b><br>${dist} away<br>${f.status} (${f.speed.toFixed(1)} km/h)`;
         if (!f.marker) {
           const icon = L.divIcon({
             html: `<div class="friend-marker" style="background:${f.color}">${f.name[0]}</div>`,
             className: ''
           });
           f.marker = L.marker([f.lat, f.lng], { icon }).addTo(map)
-            .bindPopup(`<b>${f.name}</b><br>${dist} away<br>${f.status} (${f.speed.toFixed(1)} km/h)`);
+            .bindPopup(popupHtml);
         } else {
           f.marker.setLatLng([f.lat, f.lng]);
+          f.marker.setPopupContent(popupHtml);
         }
 
         // Draw distance line connecting to friend

@@ -7,61 +7,77 @@ function setupTrackerSocket(io) {
 
     console.log(`🔌 Client connected: ${socket.id}`);
 
-    // Join tracking room
-    socket.on('join_room', async ({ roomId, userId, userName, userColor }) => {
-      currentRoomId = roomId;
-      currentUserId = userId;
+    socket.on('join_room', async (payload = {}) => {
+      const { roomId, userId, userName, userColor } = payload;
+      if (!roomId || !userId) return;
 
-      socket.join(roomId);
-      console.log(`👤 User "${userName}" (${userId}) joined room: ${roomId}`);
+      if (currentRoomId && currentRoomId !== roomId) {
+        socket.leave(currentRoomId);
+      }
+
+      currentRoomId = String(roomId);
+      currentUserId = String(userId);
+
+      socket.join(currentRoomId);
+      console.log(`👤 User "${userName || 'Friend'}" (${currentUserId}) joined room: ${currentRoomId}`);
 
       try {
-        // Fetch current active friends from PostgreSQL
-        const activeFriends = await locationController.getRoomFriends(roomId);
+        const activeFriends = await locationController.getRoomFriends(currentRoomId);
         socket.emit('room_state', activeFriends);
-
-        // Notify other room members
-        socket.to(roomId).emit('friend_joined', { userId, userName, userColor });
+        socket.to(currentRoomId).emit('friend_joined', {
+          userId: currentUserId,
+          userName: userName || 'Friend',
+          userColor: userColor || '#38BDF8',
+        });
       } catch (err) {
         console.error('Error fetching room state:', err.message);
       }
     });
 
-    // Handle incoming live GPS update
-    socket.on('send_location', async (data) => {
+    socket.on('send_location', async (data = {}) => {
       const { userId, userName, userColor, roomId, latitude, longitude, speed } = data;
+      const targetRoom = roomId || currentRoomId;
+      const targetUser = userId || currentUserId;
+      if (!targetRoom || !targetUser || typeof latitude !== 'number' || typeof longitude !== 'number') {
+        return;
+      }
+
+      const safeSpeed = typeof speed === 'number' && Number.isFinite(speed) ? speed : 0.0;
+
+      // Broadcast live update immediately so real-time tracking never stalls on DB latency
+      socket.to(targetRoom).emit('location_updated', {
+        id: targetUser,
+        name: userName || 'Friend',
+        color: userColor || '#38BDF8',
+        latitude,
+        longitude,
+        speed: safeSpeed,
+        updated_at: new Date().toISOString(),
+      });
 
       try {
-        // 1. Persist to PostgreSQL database
         await locationController.updateLocation(
-          userId,
+          targetUser,
           userName,
           userColor,
-          roomId,
+          targetRoom,
           latitude,
           longitude,
-          speed || 0.0
+          safeSpeed
         );
-
-        // 2. Broadcast to all friends in the room in real time
-        socket.to(roomId).emit('location_updated', {
-          id: userId,
-          name: userName,
-          color: userColor,
-          latitude,
-          longitude,
-          speed,
-          updated_at: new Date().toISOString(),
-        });
       } catch (err) {
-        console.error('Error handling location update:', err.message);
+        console.error('Error persisting location update:', err.message);
       }
     });
 
-    // Handle user disconnecting
     socket.on('disconnect', async () => {
       console.log(`🔌 Client disconnected: ${socket.id}`);
       if (currentRoomId && currentUserId) {
+        try {
+          await locationController.removeUserFromRoom(currentUserId, currentRoomId);
+        } catch (err) {
+          console.error('Error removing disconnected user:', err.message);
+        }
         socket.to(currentRoomId).emit('friend_left', { userId: currentUserId });
       }
     });
@@ -69,4 +85,3 @@ function setupTrackerSocket(io) {
 }
 
 module.exports = setupTrackerSocket;
-

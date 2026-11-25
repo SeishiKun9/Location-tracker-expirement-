@@ -8,11 +8,11 @@ import 'package:latlong2/latlong.dart';
 import '../models/friend_pin.dart';
 import '../services/location_service.dart';
 import '../utils/distance_utils.dart';
-import '../widgets/map_header.dart';
 import '../widgets/friends_tray.dart';
+import '../widgets/map_header.dart';
 
-/// Interactive live tracking map supporting Streets & Satellite views,
-/// live GPS updates, breadcrumb paths, and real-time friend movement.
+/// Interactive live tracking map using CartoDB Voyager tiles,
+/// live GPS updates, breadcrumb trails, and friend movement.
 class MapTrackerScreen extends StatefulWidget {
   const MapTrackerScreen({super.key});
 
@@ -21,20 +21,24 @@ class MapTrackerScreen extends StatefulWidget {
 }
 
 class _MapTrackerScreenState extends State<MapTrackerScreen> {
+  static const String _mapTileUrl =
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
   final MapController _mapController = MapController();
   bool _isMapReady = false;
-  bool _isSatellite = false;
 
   // Initial center before GPS resolves
   LatLng _myLocation = const LatLng(37.7749, -122.4194);
   bool _hasGpsFix = false;
+  bool _hasGpsError = false;
+  bool _hasAnchoredFriends = false;
   bool _isTracking = true;
   String _statusMessage = 'Connecting to GPS...';
 
   // Breadcrumb path of user's movement
   final List<LatLng> _userTrail = [];
 
-  // Active friends with simulated realistic live movement
+  // Active friends with simulated live movement
   final List<FriendPin> _friends = [
     FriendPin(
       id: 'f1',
@@ -77,70 +81,107 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
   void dispose() {
     _positionStream?.cancel();
     _liveSimulationTimer?.cancel();
+    _mapController.dispose();
     super.dispose();
   }
 
-  /// Sets up real-time device GPS listening
+  void _applyPosition(Position pos) {
+    if (!mounted) return;
+    final newLatLng = LatLng(pos.latitude, pos.longitude);
+
+    setState(() {
+      _myLocation = newLatLng;
+      _hasGpsFix = true;
+      _hasGpsError = false;
+      final speedKmH = (pos.speed * 3.6).clamp(0, 999);
+      _statusMessage = 'Live • ${speedKmH.toStringAsFixed(1)} km/h';
+
+      // Append to breadcrumb trail if moved more than 2 meters
+      if (_userTrail.isEmpty ||
+          DistanceUtils.getDistanceInMeters(_userTrail.last, newLatLng) > 2) {
+        _userTrail.add(newLatLng);
+        if (_userTrail.length > 200) _userTrail.removeAt(0);
+      }
+
+      // Anchor friends once around user's real location on first GPS fix
+      if (!_hasAnchoredFriends) {
+        _hasAnchoredFriends = true;
+        final offsets = [
+          const LatLng(0.0016, 0.0014),
+          const LatLng(-0.0018, -0.0016),
+          const LatLng(0.0022, -0.0019),
+        ];
+        for (var i = 0; i < _friends.length && i < offsets.length; i++) {
+          _friends[i].trail.clear();
+          _friends[i].position = LatLng(
+            pos.latitude + offsets[i].latitude,
+            pos.longitude + offsets[i].longitude,
+          );
+        }
+      }
+    });
+
+    if (_isTracking && _isMapReady) {
+      _safeMoveCamera(newLatLng, 16.0);
+    }
+  }
+
+  String _formatError(Object error) {
+    final msg = error.toString();
+    return msg.startsWith('Exception: ') ? msg.substring(11) : msg;
+  }
+
+  /// Sets up real-time device GPS listening.
   Future<void> _initLocationTracking() async {
+    await _positionStream?.cancel();
+    _positionStream = null;
+
+    if (mounted) {
+      setState(() {
+        _hasGpsError = false;
+        _statusMessage = 'Connecting to GPS...';
+      });
+    }
+
     try {
       await LocationService.checkAndRequestPermission();
-
       if (!mounted) return;
+
       setState(() => _statusMessage = 'Acquiring GPS fix...');
 
+      final initialPos = await LocationService.getInitialPosition();
+      if (!mounted) return;
+      if (initialPos != null) {
+        _applyPosition(initialPos);
+      }
+
       _positionStream = LocationService.getPositionStream().listen(
-        (Position pos) {
+        _applyPosition,
+        onError: (Object error) {
           if (!mounted) return;
-
-          final newLatLng = LatLng(pos.latitude, pos.longitude);
-
           setState(() {
-            _myLocation = newLatLng;
-            _hasGpsFix = true;
-            final speedKmH = (pos.speed * 3.6).clamp(0, 999);
-            _statusMessage = 'Live • ${speedKmH.toStringAsFixed(1)} km/h';
-
-            // Append to breadcrumb trail if moved more than 2 meters
-            if (_userTrail.isEmpty ||
-                DistanceUtils.getDistanceInMeters(_userTrail.last, newLatLng) > 2) {
-              _userTrail.add(newLatLng);
-              if (_userTrail.length > 200) _userTrail.removeAt(0);
-            }
-
-            // Reposition friends around user's real location on first GPS fix
-            if (_userTrail.length == 1) {
-              _friends[0].position =
-                  LatLng(pos.latitude + 0.0016, pos.longitude + 0.0014);
-              _friends[1].position =
-                  LatLng(pos.latitude - 0.0018, pos.longitude - 0.0016);
-              _friends[2].position =
-                  LatLng(pos.latitude + 0.0022, pos.longitude - 0.0019);
-            }
+            _hasGpsError = true;
+            _statusMessage = 'GPS Error: ${_formatError(error)}';
           });
-
-          if (_isTracking && _isMapReady) {
-            _safeMoveCamera(newLatLng, 16.0);
-          }
-        },
-        onError: (error) {
-          if (!mounted) return;
-          setState(() => _statusMessage = 'GPS Error: $error');
         },
       );
     } catch (error) {
       if (!mounted) return;
-      setState(() => _statusMessage = '$error');
+      setState(() {
+        _hasGpsError = true;
+        _statusMessage = _formatError(error);
+      });
     }
   }
 
-  /// Simulates realistic live friend movement so the user can see live tracking
+  /// Simulates live friend movement so the user can test tracking offline.
   void _startLiveFriendSimulation() {
-    _liveSimulationTimer = Timer.periodic(const Duration(milliseconds: 2500), (_) {
+    _liveSimulationTimer =
+        Timer.periodic(const Duration(milliseconds: 2500), (_) {
       if (!mounted) return;
 
       setState(() {
-        for (var friend in _friends) {
-          // Alex moves along north-east path
+        for (final friend in _friends) {
           if (friend.id == 'f1') {
             final latStep = (_random.nextDouble() - 0.4) * 0.00015;
             final lngStep = (_random.nextDouble() - 0.3) * 0.00015;
@@ -151,9 +192,7 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
             friend.speed = 3.5 + _random.nextDouble() * 2.0;
             friend.trail.add(friend.position);
             if (friend.trail.length > 30) friend.trail.removeAt(0);
-          }
-          // Sarah cycles around south-west
-          else if (friend.id == 'f2') {
+          } else if (friend.id == 'f2') {
             final latStep = (_random.nextDouble() - 0.5) * 0.00025;
             final lngStep = (_random.nextDouble() - 0.45) * 0.00025;
             friend.position = LatLng(
@@ -184,8 +223,12 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
     }
   }
 
-  void _toggleMapStyle() {
-    setState(() => _isSatellite = !_isSatellite);
+  void _focusFriend(LatLng target) {
+    // Pause auto-follow so the camera stays on the selected friend
+    if (_isTracking) {
+      setState(() => _isTracking = false);
+    }
+    _safeMoveCamera(target, 16.5);
   }
 
   @override
@@ -193,7 +236,6 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Professional Map Layer (CartoDB Voyager or Esri World Imagery)
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -203,36 +245,35 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
               maxZoom: 18.0,
               onMapReady: () {
                 setState(() => _isMapReady = true);
+                if (_hasGpsFix && _isTracking) {
+                  _safeMoveCamera(_myLocation, 16.0);
+                }
+              },
+              onPositionChanged: (_, hasGesture) {
+                if (hasGesture && _isTracking) {
+                  setState(() => _isTracking = false);
+                }
               },
             ),
             children: [
-              // Tile Layer: CartoDB Voyager (Street) or Esri (Satellite)
-              if (!_isSatellite)
-                TileLayer(
-                  urlTemplate:
-                      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                  subdomains: const ['a', 'b', 'c', 'd'],
-                  userAgentPackageName: 'com.example.friend_tracker',
-                )
-              else
-                TileLayer(
-                  urlTemplate:
-                      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-                  userAgentPackageName: 'com.example.friend_tracker',
-                ),
+              // Single Map API: CartoDB Voyager (OpenStreetMap, no key required)
+              TileLayer(
+                urlTemplate: _mapTileUrl,
+                subdomains: const ['a', 'b', 'c', 'd'],
+                retinaMode: RetinaMode.isHighDensity(context),
+                maxNativeZoom: 19,
+                userAgentPackageName: 'com.example.friend_tracker',
+              ),
 
               // Breadcrumb Polyline Layer (User trail & Friend trails)
               PolylineLayer(
                 polylines: [
-                  // User's own movement trail
                   if (_userTrail.length > 1)
                     Polyline(
                       points: _userTrail,
                       color: const Color(0xFF0284C7),
                       strokeWidth: 4.0,
                     ),
-
-                  // Friend movement trails
                   ..._friends
                       .where((f) => f.trail.length > 1)
                       .map((f) => Polyline(
@@ -240,8 +281,6 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                             color: f.color.withAlpha(160),
                             strokeWidth: 3.0,
                           )),
-
-                  // Proximity lines connecting you to each friend
                   ..._friends.map(
                     (f) => Polyline(
                       points: [_myLocation, f.position],
@@ -256,7 +295,6 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
               // Markers Layer
               MarkerLayer(
                 markers: [
-                  // User's Location Marker (Glowing blue avatar with pulsing radar ring)
                   Marker(
                     point: _myLocation,
                     width: 70,
@@ -309,14 +347,12 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                       ],
                     ),
                   ),
-
-                  // Friends Markers (Live moving pins with distance & status)
                   ..._friends.map((friend) {
                     final dist = DistanceUtils.getDistanceInMeters(
                         _myLocation, friend.position);
                     return Marker(
                       point: friend.position,
-                      width: 90,
+                      width: 120,
                       height: 75,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -327,7 +363,8 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xEE0F172A),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: friend.color, width: 1.5),
+                              border:
+                                  Border.all(color: friend.color, width: 1.5),
                               boxShadow: const [
                                 BoxShadow(
                                   color: Color(0x66000000),
@@ -380,21 +417,21 @@ class _MapTrackerScreenState extends State<MapTrackerScreen> {
             ],
           ),
 
-          // Floating Top Header with GPS Status & Layer Switcher
+          // Floating Top Header with GPS Status & Tracking Toggle
           MapHeader(
             hasGpsFix: _hasGpsFix,
+            hasGpsError: _hasGpsError,
             statusMessage: _statusMessage,
             isTracking: _isTracking,
-            isSatellite: _isSatellite,
             onToggleTracking: _toggleTracking,
-            onToggleMapStyle: _toggleMapStyle,
+            onRetryGps: _initLocationTracking,
           ),
 
           // Floating Bottom Friends Tray
           FriendsTray(
             friends: _friends,
             myLocation: _myLocation,
-            onSelectFriend: (target) => _safeMoveCamera(target, 16.5),
+            onSelectFriend: _focusFriend,
           ),
         ],
       ),

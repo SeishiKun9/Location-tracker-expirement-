@@ -1,26 +1,30 @@
 import 'package:flutter/material.dart';
 
-/// Top floating status header showing live GPS fix, map style toggle, and tracking controls.
+/// Top floating status header showing live GPS fix and tracking controls.
 class MapHeader extends StatelessWidget {
   final bool hasGpsFix;
+  final bool hasGpsError;
   final String statusMessage;
   final bool isTracking;
-  final bool isSatellite;
   final VoidCallback onToggleTracking;
-  final VoidCallback onToggleMapStyle;
+  final VoidCallback? onRetryGps;
 
   const MapHeader({
     super.key,
     required this.hasGpsFix,
+    this.hasGpsError = false,
     required this.statusMessage,
     required this.isTracking,
-    required this.isSatellite,
     required this.onToggleTracking,
-    required this.onToggleMapStyle,
+    this.onRetryGps,
   });
 
   @override
   Widget build(BuildContext context) {
+    final statusColor = hasGpsFix
+        ? const Color(0xFF22C55E)
+        : (hasGpsError ? const Color(0xFFEF4444) : const Color(0xFFF59E0B));
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -41,11 +45,10 @@ class MapHeader extends StatelessWidget {
                 height: 10,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: hasGpsFix ? const Color(0xFF22C55E) : const Color(0xFFF59E0B),
+                  color: statusColor,
                   boxShadow: [
                     BoxShadow(
-                      color: (hasGpsFix ? const Color(0xFF22C55E) : const Color(0xFFF59E0B))
-                          .withAlpha(120),
+                      color: statusColor.withAlpha(120),
                       blurRadius: 6,
                     ),
                   ],
@@ -67,27 +70,33 @@ class MapHeader extends StatelessWidget {
                     ),
                     Text(
                       statusMessage,
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF94A3B8),
+                      ),
                     ),
                   ],
                 ),
               ),
-              // Map Style Toggle (Streets vs Satellite)
-              IconButton(
-                tooltip: isSatellite ? 'Switch to Street Map' : 'Switch to Satellite View',
-                icon: Icon(
-                  isSatellite ? Icons.map_outlined : Icons.satellite_alt_outlined,
-                  color: isSatellite ? const Color(0xFF38BDF8) : Colors.white70,
-                  size: 20,
+              if (hasGpsError && onRetryGps != null)
+                IconButton(
+                  tooltip: 'Retry GPS',
+                  icon: const Icon(
+                    Icons.refresh,
+                    color: Color(0xFFF59E0B),
+                    size: 20,
+                  ),
+                  onPressed: onRetryGps,
                 ),
-                onPressed: onToggleMapStyle,
-              ),
-              // Live Follow / GPS Centering Toggle
               IconButton(
                 tooltip: isTracking ? 'Free Camera' : 'Follow My Location',
                 icon: Icon(
                   isTracking ? Icons.my_location : Icons.location_searching,
-                  color: isTracking ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                  color: isTracking
+                      ? const Color(0xFF38BDF8)
+                      : const Color(0xFF64748B),
                   size: 20,
                 ),
                 onPressed: onToggleTracking,
